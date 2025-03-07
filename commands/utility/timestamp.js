@@ -7,14 +7,14 @@ module.exports = {
     .setDescription("Generates a Discord timestamp from a given date and time.")
     .addStringOption((option) =>
       option
-        .setName("date")
-        .setDescription("Enter the date (YYYY-MM-DD)")
+        .setName("time")
+        .setDescription("Enter the time (HH:mm)")
         .setRequired(false)
     )
     .addStringOption((option) =>
       option
-        .setName("time")
-        .setDescription("Enter the time (HH:mm)")
+        .setName("date")
+        .setDescription("Enter the date (DD-MM-YYY)")
         .setRequired(false)
     )
     .addStringOption((option) =>
@@ -43,7 +43,7 @@ module.exports = {
           },
           { name: "Singapore Standard Time (SGT)", value: "Asia/Singapore" },
           { name: "Eastern European Time (EET)", value: "Europe/Helsinki" },
-          { name: "Western European Time (WET)", value: "Europe/Dublin" },
+          { name: "Moscow Standard Time (MSK)", value: "Europe/Moscow" },
           { name: "Alaska Standard Time (AKST)", value: "America/Anchorage" },
           {
             name: "Hawaii-Aleutian Standard Time (HST)",
@@ -72,32 +72,43 @@ module.exports = {
   async execute(interaction) {
     try {
       // Get user input
-      let inputDate =
-        interaction.options.getString("date") || moment().format("YYYY-MM-DD");
-      let inputTime =
-        interaction.options.getString("time") || moment().format("HH:mm");
+      let inputDate = interaction.options.getString("date");
+      let inputTime = interaction.options.getString("time");
       let timezone = interaction.options.getString("timezone") || "UTC";
 
       let format;
-      let inputDateTime;
+      let parsedTime;
+
       // If both date and time are provided
       if (inputDate && inputTime) {
-        inputDateTime = `${inputDate} ${inputTime}`;
+        parsedTime = moment.tz(
+          `${inputDate} ${inputTime}`,
+          "DD-MM-YYYY HH:mm",
+          timezone
+        );
         format = "f"; // Full Date & Time
       }
       // If only date is provided
       else if (inputDate) {
-        inputDateTime = `${inputDate} ${moment().format("HH:mm")}`;
+        parsedTime = moment.tz(inputDate, "DD-MM-YYYY", timezone);
         format = "d"; // Short Date
       }
       // If only time is provided
       else if (inputTime) {
-        inputDateTime = `${moment().format("YYYY-MM-DD")} ${inputTime}`;
+        parsedTime = moment.tz(
+          `${moment().format("DD-MM-YYYY")} ${inputTime}`,
+          "DD-MM-YYYY HH:mm",
+          timezone
+        );
         format = "t"; // Short Time
       }
       // Default to current date & time
       else {
-        inputDateTime = moment().format("YYYY-MM-DD HH:mm");
+        parsedTime = moment.tz(
+          moment().format("DD-MM-YYYY HH:mm"),
+          "DD-MM-YYYY HH:mm",
+          timezone
+        );
         format = "f"; // Full Date & Time
       }
 
@@ -107,13 +118,10 @@ module.exports = {
         format = userFormat;
       }
 
-      // Convert to a timestamp
-      const parsedTime = moment.tz(inputDateTime, "YYYY-MM-DD HH:mm", timezone);
-
       if (!parsedTime.isValid()) {
         return interaction.reply({
           content:
-            "❌ Invalid date/time format. Please use `YYYY-MM-DD HH:mm` in 24-hour format.",
+            "❌ Invalid date/time format. Please use `DD-MM-YYYY for the date and HH:mm (24-hour) for the time.",
           ephemeral: true,
         });
       }
@@ -125,7 +133,9 @@ module.exports = {
       const discordTimestamp = `<t:${unixTimestamp}:${format}>`;
 
       // Reply with the formatted timestamp
-      await interaction.reply(`Here is your timestamp: ${discordTimestamp}`);
+      await interaction.reply(
+        `Here is your timestamp for ${discordTimestamp}: \n\`\`\`${discordTimestamp}\`\`\``
+      );
     } catch (error) {
       console.error(error);
       await interaction.reply({
