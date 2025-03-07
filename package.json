@@ -12,6 +12,7 @@
   "dependencies": {
     "discord.js": "^14.18.0",
     "dotenv": "^16.4.7",
+    "moment-timezone": "^0.5.47",
     "touch": "^3.1.1"
   }
 }
