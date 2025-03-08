@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require("discord.js");
-const moment = require("moment-timezone");
+const { DateTime } = require("luxon");
+const { TIMEZONES, FORMATS } = require("../../constants");
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -14,101 +15,66 @@ module.exports = {
     .addStringOption((option) =>
       option
         .setName("date")
-        .setDescription("Enter the date (DD-MM-YYY)")
+        .setDescription("Enter the date (DD-MM-YYYY)")
         .setRequired(false)
     )
     .addStringOption((option) =>
       option
-        .setName("timezone")
-        .setDescription('Enter your timezone (e.g., "America/New_York")')
-        .setRequired(false) // Make timezone optional.
-        .addChoices(
-          { name: "Greenwich Mean Time (GMT)", value: "Europe/London" },
-          { name: "Central European Time (CET)", value: "Europe/Paris" },
-          { name: "Pacific Standard Time (PST)", value: "America/Los_Angeles" },
-          { name: "Eastern Standard Time (EST)", value: "America/New_York" },
-          { name: "Indian Standard Time (IST)", value: "Asia/Kolkata" },
-          { name: "Japan Standard Time (JST)", value: "Asia/Tokyo" },
-          {
-            name: "Australian Eastern Standard Time (AEST)",
-            value: "Australia/Sydney",
-          },
-          { name: "Coordinated Universal Time (UTC)", value: "UTC" },
-          { name: "Central Standard Time (CST)", value: "America/Chicago" },
-          { name: "Mountain Standard Time (MST)", value: "America/Denver" },
-          { name: "Brazilian Standard Time (BRT)", value: "America/Sao_Paulo" },
-          {
-            name: "New Zealand Standard Time (NZST)",
-            value: "Pacific/Auckland",
-          },
-          { name: "Singapore Standard Time (SGT)", value: "Asia/Singapore" },
-          { name: "Eastern European Time (EET)", value: "Europe/Helsinki" },
-          { name: "Moscow Standard Time (MSK)", value: "Europe/Moscow" },
-          { name: "Alaska Standard Time (AKST)", value: "America/Anchorage" },
-          {
-            name: "Hawaii-Aleutian Standard Time (HST)",
-            value: "Pacific/Honolulu",
-          }
-        )
+        .setName("local-timezone")
+        .setDescription("Enter your local timezone")
+        .setRequired(false)
+        .addChoices(...TIMEZONES)
     )
     .addStringOption((option) =>
       option
         .setName("format")
         .setDescription("Select the format")
         .setRequired(false)
-        .addChoices(
-          { name: "Short Time (12:34 PM)", value: "t" },
-          { name: "Long Time (12:34:56 PM)", value: "T" },
-          { name: "Short Date (01/01/2023)", value: "d" },
-          { name: "Long Date (January 1, 2023)", value: "D" },
-          { name: "Full Date & Time (January 1, 2023, 12:34 PM)", value: "f" },
-          {
-            name: "Day of Week (Sunday, January 1, 2023, 12:34 PM)",
-            value: "F",
-          },
-          { name: "Relative (5 minutes ago)", value: "R" }
-        )
+        .addChoices(...FORMATS)
     ),
   async execute(interaction) {
     try {
       // Get user input
       let inputDate = interaction.options.getString("date");
       let inputTime = interaction.options.getString("time");
-      let timezone = interaction.options.getString("timezone") || "UTC";
+      let timezone =
+        interaction.options.getString("local-timezone") || "UTC+00:00";
 
-      let format;
-      let parsedTime;
+      let format; // The format value of the timestamp
+      let parsedTime; // The datetime in luxon format
 
       // If both date and time are provided
       if (inputDate && inputTime) {
-        parsedTime = moment.tz(
+        parsedTime = DateTime.fromFormat(
           `${inputDate} ${inputTime}`,
-          "DD-MM-YYYY HH:mm",
-          timezone
+          "dd-MM-yyyy HH:mm",
+          { zone: timezone }
         );
         format = "f"; // Full Date & Time
       }
       // If only date is provided
       else if (inputDate) {
-        parsedTime = moment.tz(inputDate, "DD-MM-YYYY", timezone);
+        parsedTime = DateTime.fromFormat(inputDate, "dd-MM-yyyy", {
+          zone: timezone,
+        });
         format = "d"; // Short Date
       }
       // If only time is provided
       else if (inputTime) {
-        parsedTime = moment.tz(
-          `${moment().format("DD-MM-YYYY")} ${inputTime}`,
-          "DD-MM-YYYY HH:mm",
-          timezone
+        // Get the current date (now, but just the date)
+        const currentDate = DateTime.now()
+          .setZone(timezone)
+          .toFormat("dd-MM-yyyy");
+        parsedTime = DateTime.fromFormat(
+          `${currentDate} ${inputTime}`,
+          "dd-MM-yyyy HH:mm",
+          { zone: timezone }
         );
         format = "t"; // Short Time
       }
-      // Default to current date & time
+      // Default to current date
       else {
-        parsedTime = moment.tz(
-          moment().format("DD-MM-YYYY HH:mm"),
-          "DD-MM-YYYY HH:mm",
-          timezone
-        );
+        parsedTime = DateTime.now().setZone(timezone);
         format = "f"; // Full Date & Time
       }
 
@@ -118,21 +84,22 @@ module.exports = {
         format = userFormat;
       }
 
-      if (!parsedTime.isValid()) {
+      // Check that the pasred time format is invalid and return an error to the user
+      if (!parsedTime.isValid) {
         return interaction.reply({
           content:
-            "❌ Invalid date/time format. Please use `DD-MM-YYYY for the date and HH:mm (24-hour) for the time.",
+            "❌ Invalid date/time format. Please use `DD-MM-YYYY` for the date and `HH:mm` (24-hour) for the time.",
           ephemeral: true,
         });
       }
 
-      // Convert to Unix timestamp (seconds)
-      const unixTimestamp = Math.floor(parsedTime.unix());
+      // Convert the pased time into secconds, then convert to unix
+      const unixTimestamp = Math.floor(parsedTime.toSeconds());
 
       // Generate Discord timestamp format
       const discordTimestamp = `<t:${unixTimestamp}:${format}>`;
 
-      // Reply with the formatted timestamp
+      // Reply with the formatted timestamp and a easy to copy code block
       await interaction.reply(
         `Here is your timestamp for ${discordTimestamp}: \n\`\`\`${discordTimestamp}\`\`\``
       );
